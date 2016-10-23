@@ -19,12 +19,12 @@ const long interval = 2000;
 char buffer[1000];
 float humidity, temp;
 char thingSpeakAddress[] = "api.thingspeak.com";
-char writeAPIKey[] = "EDBWQ9ANCKM0E184";
+char writeAPIKey[] = "XXXXXXXXX";
 ESP8266WebServer server(80);
 
 String webString="";
 char ssid[] = "Mansternet";
-char password[] = "snoppsnopp666";
+char password[] = "XXXXXXXX";
 
 
 void handle_root() {
