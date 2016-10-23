@@ -5,12 +5,10 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266WebServer.h>
 #include "../lib/TickerScheduler/TickerScheduler.h"
-
 #include "config.h"
 
 #define DHTTYPE DHT11
 #define DHTPIN  2
-
 
 DHT dht(DHTPIN, DHTTYPE, 11);
 
@@ -79,7 +77,7 @@ bool httpPost()
 {
 
 Serial.println("Connecting");
-  if (client.connect(host, 80)){
+  if (client.connect(host.c_str(), 80)){
     String postStr = apiKey;
     postStr +="&field1=";
     postStr += String(temp);
@@ -137,6 +135,29 @@ void sendData(){
 
 }
 
+void setupNetwork(){
+
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.disconnect();
+  delay(100);
+
+  WiFiMulti.addAP(ssid.c_str(), password.c_str());
+  http.setReuse(true);
+
+  Serial.print("\n\r \n\rWorking to connect");
+
+  while (WiFiMulti.run() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("DHT Weather Reading Server");
+  Serial.print("Connected to ");
+  Serial.println(ssid);
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
 void setupServer(){
   server.on("/", handle_root);
 
@@ -171,45 +192,37 @@ void setupServer(){
 
   });
 
+
+  server.on("/network", [](){
+
+    String s = server.arg("ssid");
+    String p = server.arg("password");
+
+    if (s.length() > 0 && p.length() > 0){
+      Serial.println("Changing network to SSID=" + s + " Password=" + p);
+      ssid = s;
+      password = p;
+      setupNetwork();
+    }
+
+  });
+
+
   server.begin();
   Serial.println("HTTP server started");
 
 }
 
 
-void setupNetwork(){
 
-  WiFi.mode(WIFI_AP_STA);
-  WiFi.disconnect();
-  delay(100);
-  
-  WiFiMulti.addAP(ssid, password);
-  http.setReuse(true);
-
-  Serial.print("\n\r \n\rWorking to connect");
-
-  while (WiFiMulti.run() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("DHT Weather Reading Server");
-  Serial.print("Connected to ");
-  Serial.println(ssid);
-  Serial.print("IP address: ");
-  Serial.println(WiFi.localIP());
-}
 void setup(void){
   pinMode(2, OUTPUT);
   Serial.begin(115200);
 
   dht.begin();
 
-  //scanNetworks();
-
   setupNetwork();
   setupServer();
-
 
   updateTime = 60000;
 
