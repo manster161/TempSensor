@@ -27,10 +27,11 @@ WiFiClient client;
 
 TickerScheduler scheduler(1);
 
+int updateTime;
+
 void scanNetworks(){
 
-  WiFi.mode(WIFI_AP_STA
-  );
+  WiFi.mode(WIFI_AP_STA);
   WiFi.disconnect();
   delay(100);
 
@@ -60,34 +61,20 @@ void scanNetworks(){
 }
 }
 
+bool IsNumeric(String s){
+  for (int i = 0; i < s.length(); i++){
+    if (!isDigit(s[0]))
+    return false;
+  }
+  return true;
+}
 
 void handle_root() {
   server.send(200, "text/plain", "Hello from the weather esp8266, read from /temp or /humidity");
   delay(100);
 }
 
-void setupServer(){
-  server.on("/", handle_root);
 
-  server.on("/temp", [](){  // if you add this subdirectory to your webserver call, you get text below :)
-          // read sensor
-    webString="Temperature: "+String((int)temp)+"c";   // Arduino has a hard time with float to string
-    server.send(200, "text/plain", webString);            // send to someones browser when asked
-  });
-
-  server.on("/humidity", [](){  // if you add this subdirectory to your webserver call, you get text below :)
-             // read sensor
-    webString="Humidity: "+String((int)humidity)+"%";
-    server.send(200, "text/plain", webString);               // send to someones browser when asked
-  });
-
-  
-
-
-  server.begin();
-  Serial.println("HTTP server started");
-
-}
 bool httpPost()
 {
 
@@ -147,17 +134,55 @@ void gettemperature() {
 void sendData(){
   gettemperature();
   httpPost();
-  scheduler.add(0, 20000, sendData);
+
 }
 
-void setup(void){
-  pinMode(2, OUTPUT);
-  Serial.begin(115200);
+void setupServer(){
+  server.on("/", handle_root);
 
-  dht.begin();
+  server.on("/temp", [](){  // if you add this subdirectory to your webserver call, you get text below :)
+          // read sensor
+    webString="Temperature: "+String((int)temp)+"c";   // Arduino has a hard time with float to string
+    server.send(200, "text/plain", webString);            // send to someones browser when asked
+  });
 
-  scanNetworks();
+  server.on("/humidity", [](){  // if you add this subdirectory to your webserver call, you get text below :)
+             // read sensor
+    webString="Humidity: "+String((int)humidity)+"%";
+    server.send(200, "text/plain", webString);               // send to someones browser when asked
+  });
 
+
+  server.on("/settings", [](){  // if you add this subdirectory to your webserver call, you get text below :)
+
+    String state = server.arg("updatetime");
+    if (IsNumeric(state)){
+       updateTime = state.toInt();
+       bool removeSuccess =  scheduler.remove(0);
+
+       if (removeSuccess)
+        Serial.println("Successfully removed scheduler");
+
+        if (scheduler.add(0, updateTime, sendData))
+          Serial.println("Successfully added scheduler");
+    }
+    webString="Update time: "+String((int)updateTime/1000)+"s";
+    server.send(200, "text/plain", webString);
+
+  });
+
+  server.begin();
+  Serial.println("HTTP server started");
+
+}
+
+
+void setupNetwork(){
+
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.disconnect();
+  delay(100);
+  
   WiFiMulti.addAP(ssid, password);
   http.setReuse(true);
 
@@ -173,10 +198,22 @@ void setup(void){
   Serial.println(ssid);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+}
+void setup(void){
+  pinMode(2, OUTPUT);
+  Serial.begin(115200);
 
+  dht.begin();
+
+  //scanNetworks();
+
+  setupNetwork();
   setupServer();
 
-  scheduler.add(0, 20000, sendData);
+
+  updateTime = 60000;
+
+  scheduler.add(0, updateTime, sendData);
 
 }
 
