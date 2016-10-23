@@ -1,12 +1,9 @@
 #include <Arduino.h>
 #include "../lib/DHT/DHT.h"
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
 #include <ESP8266WiFiMulti.h>
-
 #include <ESP8266HTTPClient.h>
-
+#include "config.h"
 
 #define DHTTYPE DHT11
 #define DHTPIN  2
@@ -18,22 +15,44 @@ unsigned long previousMillis = 0;        // will store last temp was read
 const long interval = 2000;
 char buffer[1000];
 float humidity, temp;
-char thingSpeakAddress[] = "api.thingspeak.com";
-char writeAPIKey[] = "EDBWQ9ANCKM0E184";
-ESP8266WebServer server(80);
+
+
 
 String webString="";
-char ssid[] = "Mansternet";
-char password[] = "snoppsnopp666";
+ESP8266WiFiMulti WiFiMulti;
+
+HTTPClient http;
+WiFiClient client;
 
 
-void handle_root() {
-  server.send(200, "text/plain", "Hello from the weather esp8266, read from /temp or /humidity");
-  delay(100);
-}
+bool httpPost()
+{
 
-void postdata(){
+Serial.println("Connecting");
+  if (client.connect(host, 80)){
+    String postStr = apiKey;
+    postStr +="&field1=";
+    postStr += String(temp);
+    postStr +="&field2=";
+    postStr += String(humidity);
+    postStr += "\r\n\r\n";
 
+    client.print("POST /update HTTP/1.1\n");
+    client.print("Host: api.thingspeak.com\n");
+    client.print("Connection: close\n");
+    client.print("X-THINGSPEAKAPIKEY: "+ String(apiKey) + "\n");
+    client.print("Content-Type: application/x-www-form-urlencoded\n");
+    client.print("Content-Length: ");
+    client.print(postStr.length());
+    client.print("\n\n");
+    client.print(postStr);
+    client.stop();
+    Serial.println("Posted:" + postStr);
+  }
+  else
+  {
+    Serial.println("Connect fail");
+  }
 }
 
 
@@ -66,10 +85,12 @@ void setup(void){
   dht.begin();
 
 
-  WiFi.begin(ssid, password);
+  WiFiMulti.addAP(ssid, password);
+  http.setReuse(true);
+
   Serial.print("\n\r \n\rWorking to connect");
 
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFiMulti.run() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
@@ -80,22 +101,7 @@ void setup(void){
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  server.on("/", handle_root);
-
-  server.on("/temp", [](){  // if you add this subdirectory to your webserver call, you get text below :)
-    gettemperature();       // read sensor
-    webString="Temperature: "+String((int)temp)+"c";   // Arduino has a hard time with float to string
-    server.send(200, "text/plain", webString);            // send to someones browser when asked
-  });
-
-  server.on("/humidity", [](){  // if you add this subdirectory to your webserver call, you get text below :)
-    gettemperature();           // read sensor
-    webString="Humidity: "+String((int)humidity)+"%";
-    server.send(200, "text/plain", webString);               // send to someones browser when asked
-  });
-
-  server.begin();
-  Serial.println("HTTP server started");
+  //Serial.println("HTTP server started");
 }
 
 
@@ -103,5 +109,10 @@ void setup(void){
 
 void loop(void){
 
-    server.handleClient();
+  if (WiFiMulti.run() == WL_CONNECTED){
+    gettemperature();
+    httpPost();
+    delay(20000);
+
+  }
 }
