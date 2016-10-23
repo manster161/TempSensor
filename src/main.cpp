@@ -3,6 +3,9 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
 #include <ESP8266HTTPClient.h>
+#include <ESP8266WebServer.h>
+#include "../lib/TickerScheduler/TickerScheduler.h"
+
 #include "config.h"
 
 #define DHTTYPE DHT11
@@ -16,15 +19,75 @@ const long interval = 2000;
 char buffer[1000];
 float humidity, temp;
 
-
-
 String webString="";
 ESP8266WiFiMulti WiFiMulti;
-
+ESP8266WebServer server(80);
 HTTPClient http;
 WiFiClient client;
 
+TickerScheduler scheduler(1);
 
+void scanNetworks(){
+
+  WiFi.mode(WIFI_AP_STA
+  );
+  WiFi.disconnect();
+  delay(100);
+
+  Serial.println("scan start");
+
+ // WiFi.scanNetworks will return the number of networks found
+ int n = WiFi.scanNetworks();
+ Serial.println("scan done");
+ if (n == 0)
+   Serial.println("no networks found");
+ else
+ {
+   Serial.print(n);
+   Serial.println(" networks found");
+   for (int i = 0; i < n; ++i)
+   {
+     // Print SSID and RSSI for each network found
+     Serial.print(i + 1);
+     Serial.print(": ");
+     Serial.print(WiFi.SSID(i));
+     Serial.print(" (");
+     Serial.print(WiFi.RSSI(i));
+     Serial.print(")");
+     Serial.println((WiFi.encryptionType(i) == ENC_TYPE_NONE)?" ":"*");
+     delay(10);
+   }
+}
+}
+
+
+void handle_root() {
+  server.send(200, "text/plain", "Hello from the weather esp8266, read from /temp or /humidity");
+  delay(100);
+}
+
+void setupServer(){
+  server.on("/", handle_root);
+
+  server.on("/temp", [](){  // if you add this subdirectory to your webserver call, you get text below :)
+          // read sensor
+    webString="Temperature: "+String((int)temp)+"c";   // Arduino has a hard time with float to string
+    server.send(200, "text/plain", webString);            // send to someones browser when asked
+  });
+
+  server.on("/humidity", [](){  // if you add this subdirectory to your webserver call, you get text below :)
+             // read sensor
+    webString="Humidity: "+String((int)humidity)+"%";
+    server.send(200, "text/plain", webString);               // send to someones browser when asked
+  });
+
+  
+
+
+  server.begin();
+  Serial.println("HTTP server started");
+
+}
 bool httpPost()
 {
 
@@ -56,6 +119,8 @@ Serial.println("Connecting");
 }
 
 
+
+
 void gettemperature() {
   // Wait at least 2 seconds seconds between measurements.
   // if the difference between the current time and last time you read
@@ -78,12 +143,20 @@ void gettemperature() {
     }
   }
 }
+
+void sendData(){
+  gettemperature();
+  httpPost();
+  scheduler.add(0, 20000, sendData);
+}
+
 void setup(void){
   pinMode(2, OUTPUT);
   Serial.begin(115200);
 
   dht.begin();
 
+  scanNetworks();
 
   WiFiMulti.addAP(ssid, password);
   http.setReuse(true);
@@ -101,7 +174,10 @@ void setup(void){
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 
-  //Serial.println("HTTP server started");
+  setupServer();
+
+  scheduler.add(0, 20000, sendData);
+
 }
 
 
@@ -110,9 +186,7 @@ void setup(void){
 void loop(void){
 
   if (WiFiMulti.run() == WL_CONNECTED){
-    gettemperature();
-    httpPost();
-    delay(20000);
-
+    scheduler.update();
+    server.handleClient();
   }
 }
