@@ -16,7 +16,7 @@ unsigned long previousMillis = 0;        // will store last temp was read
 const long interval = 2000;
 char buffer[1000];
 float humidity, temp;
-
+int foundNetworks = 0;
 String webString="";
 ESP8266WiFiMulti WiFiMulti;
 ESP8266WebServer server(80);
@@ -36,15 +36,15 @@ void scanNetworks(){
   Serial.println("scan start");
 
  // WiFi.scanNetworks will return the number of networks found
- int n = WiFi.scanNetworks();
+ foundNetworks = WiFi.scanNetworks();
  Serial.println("scan done");
- if (n == 0)
+ if (foundNetworks == 0)
    Serial.println("no networks found");
  else
  {
-   Serial.print(n);
+   Serial.print(foundNetworks);
    Serial.println(" networks found");
-   for (int i = 0; i < n; ++i)
+   for (int i = 0; i < foundNetworks; ++i)
    {
      // Print SSID and RSSI for each network found
      Serial.print(i + 1);
@@ -57,6 +57,7 @@ void scanNetworks(){
      delay(10);
    }
 }
+
 }
 
 bool IsNumeric(String s){
@@ -192,6 +193,18 @@ void setupServer(){
 
   });
 
+  server.on("/networks", [](){
+    webString = "";
+    foundNetworks = WiFi.scanNetworks();
+    for (int i = 0; i < foundNetworks; ++i)
+    {
+      // Print SSID and RSSI for each network found
+      webString += String(i +1 ) +  ": " + WiFi.SSID(i) + " (" + WiFi.RSSI(i) + ")\r\n";
+      delay(10);
+    }
+
+    server.send(200, "text/plain", webString);
+  });
 
   server.on("/network", [](){
 
@@ -221,7 +234,9 @@ void setup(void){
 
   dht.begin();
 
+  scanNetworks();
   setupNetwork();
+
   setupServer();
 
   updateTime = 60000;
