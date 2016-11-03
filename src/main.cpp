@@ -235,9 +235,8 @@ void setup(void){
   dht.begin();
 
   scanNetworks();
-  setupNetwork();
-
   setupServer();
+  setupNetwork();
 
   updateTime = 60000;
 
